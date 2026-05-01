@@ -20,6 +20,8 @@ export default function ListingDetail() {
 
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [sellerRating, setSellerRating] = useState({ avg: 0, count: 0 });
+  const [loadingRatings, setLoadingRatings] = useState(false);
 
   const id = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
 
@@ -31,26 +33,61 @@ export default function ListingDetail() {
         return;
       }
 
-      // Fetch user
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
+      try {
+        // Fetch user and listing in parallel
+        const [userResult, listingResult] = await Promise.all([
+          supabase.auth.getUser(),
+          supabase
+            .from('listings')
+            .select(`
+              *,
+              profiles:seller_id (full_name, avatar_url)
+            `)
+            .eq('id', id)
+            .single()
+        ]);
 
-      // Fetch listing details
-      const { data, error: fetchError } = await supabase
-        .from('listings')
-        .select(`
-          *,
-          profiles:seller_id (full_name, avatar_url)
-        `)
-        .eq('id', id)
-        .single();
+        const user = userResult.data?.user ?? null;
+        const { data, error: fetchError } = listingResult;
 
-      if (fetchError || !data) {
-        setError(true);
-      } else {
+        setCurrentUser(user);
+
+        if (fetchError) {
+          setError(true);
+          return;
+        }
+
+        if (!data) {
+          setError(true);
+          return;
+        }
+
         setListing(data);
+
+        // Load seller rating asynchronously after main content (mobile version approach)
+        setLoadingRatings(true);
+        try {
+          const { data: ratingData, error: ratingsError } = await supabase
+            .from('ratings')
+            .select('stars')
+            .eq('seller_id', data.seller_id);
+
+          if (!ratingsError && ratingData && ratingData.length > 0) {
+            const avg = ratingData.reduce((sum: number, r: any) => sum + r.stars, 0) / ratingData.length;
+            setSellerRating({ avg: Math.round(avg * 10) / 10, count: ratingData.length });
+          } else {
+            setSellerRating({ avg: 0, count: 0 });
+          }
+        } catch (e) {
+          setSellerRating({ avg: 0, count: 0 });
+        } finally {
+          setLoadingRatings(false);
+        }
+      } catch (err: any) {
+        setError(true);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     fetchListing();
   }, [id]);
@@ -146,7 +183,7 @@ export default function ListingDetail() {
                                         <img
                                             src={url}
                                             alt={`${listing.title} ${idx + 1}`}
-                                            className="h-full w-full object-contain md:object-cover cursor-pointer"
+                                            className="w-full min-h-[30vh] sm:min-h-[40vh] md:min-h-[50vh] lg:min-h-[60vh] object-contain bg-slate-100 cursor-pointer"
                                             onClick={() => setFullscreenImage(url)}
                                         />
                                     </div>
@@ -287,7 +324,10 @@ export default function ListingDetail() {
 
             <div className="border-t border-border pt-6 mt-8">
                 <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => window.location.href = `/perfil?userId=${listing.seller_id}`}
+                        className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
+                    >
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-bg border border-border">
                             {listing.profiles?.avatar_url ? (
                                 <img src={listing.profiles.avatar_url} alt="vendedor" className="w-full h-full object-cover" />
@@ -300,8 +340,18 @@ export default function ListingDetail() {
                         <div>
                             <p className="text-xs text-muted uppercase tracking-wider font-bold mb-0.5">Vendedor</p>
                             <p className="font-bold text-text">{listing.profiles?.full_name || 'Usuario Anónimo'}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                                {Array.from({ length: 5 }).map((_, i) => (
+                                  <span key={i} className={`material-icons text-sm ${i < Math.round(sellerRating.avg) ? 'text-yellow-400' : 'text-gray-300'}`}>
+                                    {i < Math.round(sellerRating.avg) ? 'star' : 'star_border'}
+                                  </span>
+                                ))}
+                                <span className="text-xs text-muted ml-1">
+                                  {sellerRating.avg > 0 ? `${sellerRating.avg.toFixed(1)} (${sellerRating.count} valoraciones)` : 'Nuevo'}
+                                </span>
+                            </div>
                         </div>
-                    </div>
+                    </button>
                 </div>
 
                 {isMine ? (
@@ -434,7 +484,7 @@ export default function ListingDetail() {
                               extra_info: lines.join('\n'),
                           });
                           if (!emailResult.success) {
-                              console.warn('EmailJS no configurado o falló:', emailResult.error);
+                              // EmailJS failed silently
                           }
                       } catch (err: any) {
                           alert('Error al enviar el reporte: ' + err.message);
@@ -474,6 +524,10 @@ export default function ListingDetail() {
                   </div>
                   <form onSubmit={async (e) => {
                       e.preventDefault();
+                      if (!editForm.condition) {
+                          alert('Por favor, selecciona un estado.');
+                          return;
+                      }
                       setSavingEdit(true);
                       try {
                           const priceNum = parseInt(editForm.price.replace(/[^0-9]/g, ''), 10);
@@ -507,16 +561,16 @@ export default function ListingDetail() {
                           <input type="text" required value={editForm.author} onChange={(e) => setEditForm({...editForm, author: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text" />
                       </div>
                       <div>
-                          <label className="block text-sm font-bold text-text mb-1">Editorial</label>
-                          <input type="text" value={editForm.editorial} onChange={(e) => setEditForm({...editForm, editorial: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text" />
+                          <label className="block text-sm font-bold text-text mb-1">Editorial *</label>
+                          <input type="text" required value={editForm.editorial} onChange={(e) => setEditForm({...editForm, editorial: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text" />
                       </div>
                       <div>
                           <label className="block text-sm font-bold text-text mb-1">Precio (COP)</label>
                           <input type="number" required value={editForm.price} onChange={(e) => setEditForm({...editForm, price: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text" />
                       </div>
                       <div>
-                          <label className="block text-sm font-bold text-text mb-1">Categoría</label>
-                          <select value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text">
+                          <label className="block text-sm font-bold text-text mb-1">Categoría *</label>
+                          <select required value={editForm.category} onChange={(e) => setEditForm({...editForm, category: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text">
                               <option value="">Selecciona una categoría</option>
                               {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                           </select>
@@ -530,12 +584,12 @@ export default function ListingDetail() {
                           </div>
                       </div>
                       <div>
-                          <label className="block text-sm font-bold text-text mb-1">Ubicación</label>
-                          <input type="text" value={editForm.location} onChange={(e) => setEditForm({...editForm, location: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text" />
+                          <label className="block text-sm font-bold text-text mb-1">Ubicación *</label>
+                          <input type="text" required value={editForm.location} onChange={(e) => setEditForm({...editForm, location: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text" />
                       </div>
                       <div>
-                          <label className="block text-sm font-bold text-text mb-1">Descripción</label>
-                          <textarea value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text h-24 resize-none" />
+                          <label className="block text-sm font-bold text-text mb-1">Descripción *</label>
+                          <textarea required value={editForm.description} onChange={(e) => setEditForm({...editForm, description: e.target.value})} className="w-full px-4 py-2 border border-border rounded-xl focus:border-primary outline-none bg-bg text-text h-24 resize-none" />
                       </div>
                       <button disabled={savingEdit} type="submit" className="w-full bg-primary hover:bg-primary-dark transition-colors text-white font-bold py-3 rounded-xl disabled:opacity-50">
                           {savingEdit ? 'Guardando...' : 'Guardar cambios'}

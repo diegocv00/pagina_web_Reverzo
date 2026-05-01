@@ -18,6 +18,12 @@ export default function ChatWindow() {
 
   const [sendingReportEmail, setSendingReportEmail] = useState(false);
 
+  const [sellerRating, setSellerRating] = useState({ avg: 0, count: 0 });
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingStars, setRatingStars] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const conversationId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
@@ -39,6 +45,19 @@ export default function ChatWindow() {
       setMessages(msgs);
       setLoading(false);
       markAsRead(conversationId);
+
+      // Fetch seller rating if this is a marketplace chat
+      if (conv?.listing?.seller_id) {
+        const { data: ratingData } = await supabase
+          .from('ratings')
+          .select('stars')
+          .eq('seller_id', conv.listing.seller_id);
+        
+        if (ratingData && ratingData.length > 0) {
+          const avg = ratingData.reduce((sum: number, r: any) => sum + r.stars, 0) / ratingData.length;
+          setSellerRating({ avg: Math.round(avg * 10) / 10, count: ratingData.length });
+        }
+      }
 
       const channel = supabase
         .channel(`chat_${conversationId}`)
@@ -84,7 +103,6 @@ export default function ChatWindow() {
         await sendMessage(conversationId as any, msgContent as any);
       }
     } catch (e) {
-      console.error(e);
       alert('Error al enviar mensaje');
     }
   };
@@ -116,7 +134,6 @@ export default function ChatWindow() {
         await sendMessage(conversationId as any, '' as any, null as any, publicUrl as any);
       }
     } catch (error) {
-      console.error('Error uploading image:', error);
       alert('Error al subir imagen');
     } finally {
       setUploading(false);
@@ -177,13 +194,12 @@ export default function ChatWindow() {
         extra_info: lines.join('\n'),
       });
       if (!emailResult.success) {
-        console.warn('EmailJS no configurado o falló:', emailResult.error);
+        // EmailJS failed silently
       }
 
       setShowReportModal(false);
       setReportReason('');
     } catch (e) {
-      console.error(e);
       alert('Error al enviar el reporte');
     } finally {
       setSendingReportEmail(false);
@@ -249,17 +265,68 @@ export default function ChatWindow() {
         extra_info: lines.join('\n'),
       });
       if (!emailResult.success) {
-        console.warn('EmailJS no configurado o falló:', emailResult.error);
+        // EmailJS failed silently
       }
 
       setShowMessageReportModal(false);
       setReportingMessageId(null);
       setMessageReportReason('');
     } catch (e) {
-      console.error(e);
       alert('Error al enviar el reporte del mensaje');
     } finally {
       setSendingReportEmail(false);
+    }
+  };
+
+  const handleSubmitRating = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    if (ratingStars === 0) {
+      alert('Por favor, selecciona una calificación de estrellas.');
+      return;
+    }
+
+    setSubmittingRating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No autenticado');
+
+      const otherUserId = userId === conversation?.buyer_id ? conversation?.seller_id : conversation?.buyer_id;
+      if (!otherUserId) throw new Error('No se pudo identificar al usuario');
+
+      // Check if already rated
+      const { data: existingRating } = await supabase
+        .from('ratings')
+        .select('id')
+        .eq('reviewer_id', user.id)
+        .eq('seller_id', otherUserId)
+        .single();
+
+      if (existingRating) {
+        alert('Ya has calificado a este usuario.');
+        return;
+      }
+
+      await supabase.from('ratings').insert({
+        reviewer_id: user.id,
+        seller_id: otherUserId,
+        listing_id: conversation?.listing?.id || null,
+        stars: ratingStars,
+        comment: ratingComment.trim() || null,
+      });
+
+      // Update local rating state
+      const newCount = sellerRating.count + 1;
+      const newAvg = ((sellerRating.avg * sellerRating.count) + ratingStars) / newCount;
+      setSellerRating({ avg: Math.round(newAvg * 10) / 10, count: newCount });
+
+      setShowRatingModal(false);
+      setRatingStars(0);
+      setRatingComment('');
+      alert('¡Calificación enviada con éxito!');
+    } catch (e: any) {
+      alert('Error al enviar la calificación: ' + e.message);
+    } finally {
+      setSubmittingRating(false);
     }
   };
 
@@ -268,7 +335,7 @@ export default function ChatWindow() {
   const otherProfile = userId === conversation?.buyer_id ? conversation?.seller_profile : conversation?.buyer_profile;
 
   return (
-    <div className="flex flex-col h-[600px] bg-card rounded-3xl border border-border overflow-hidden">
+    <div className="flex flex-col h-[70vh] sm:h-[75vh] md:h-[600px] bg-card rounded-3xl border border-border overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-border flex items-center justify-between bg-bg/50">
         <div className="flex items-center gap-3">
@@ -277,18 +344,45 @@ export default function ChatWindow() {
           </div>
           <div>
             <h3 className="font-bold text-text text-sm">{otherProfile?.full_name || 'Usuario'}</h3>
-            <p className="text-[10px] text-muted truncate max-w-[200px] uppercase font-bold tracking-tight">
-              Sobre: {conversation?.listing?.title}
-            </p>
+            {conversation?.listing ? (
+              <>
+                <p className="text-[10px] text-muted truncate max-w-[200px] uppercase font-bold tracking-tight">
+                  Sobre: {conversation.listing.title}
+                </p>
+                {sellerRating.count > 0 && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <span key={i} className={`material-icons text-xs ${i < Math.round(sellerRating.avg) ? 'text-yellow-400' : 'text-gray-300'}`}>
+                        {i < Math.round(sellerRating.avg) ? 'star' : 'star_border'}
+                      </span>
+                    ))}
+                    <span className="text-[10px] text-muted ml-1">
+                      {sellerRating.avg.toFixed(1)} ({sellerRating.count})
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-[10px] text-muted uppercase font-bold tracking-tight">Chat de comunidad</p>
+            )}
           </div>
         </div>
-        <button
-          onClick={() => setShowReportModal(true)}
-          className="text-muted hover:text-danger transition-colors p-2"
-          title="Reportar usuario"
-        >
-          <span className="material-icons">flag</span>
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowRatingModal(true)}
+            className="text-muted hover:text-primary transition-colors p-2"
+            title={conversation?.listing ? "Calificar vendedor" : "Calificar usuario"}
+          >
+            <span className="material-icons">star</span>
+          </button>
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="text-muted hover:text-danger transition-colors p-2"
+            title="Reportar usuario"
+          >
+            <span className="material-icons">flag</span>
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
@@ -432,7 +526,7 @@ export default function ChatWindow() {
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
-                  onClick={() => { setShowMessageReportModal(false); setReportingMessageId(null); setMessageReportReason(''); }}
+                  onClick={() => { setShowMessageReportModal(false); setMessageReportReason(''); }}
                   className="px-4 py-2 rounded-xl text-muted hover:bg-bg transition-colors"
                 >
                   Cancelar
@@ -443,6 +537,61 @@ export default function ChatWindow() {
                   className="px-6 py-2 bg-danger text-white rounded-xl hover:bg-danger/80 transition-colors font-bold shadow-sm disabled:opacity-50"
                 >
                   {sendingReportEmail ? 'Enviando...' : 'Enviar reporte'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rating Modal */}
+      {showRatingModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card w-full max-w-md rounded-3xl border border-border p-6 shadow-2xl">
+            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <span className="material-icons text-primary">star</span>
+              Calificar {conversation?.listing ? 'vendedor' : 'usuario'}
+            </h3>
+            <form onSubmit={handleSubmitRating} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-muted mb-2">Tu calificación</label>
+                <div className="flex gap-2 justify-center">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setRatingStars(i + 1)}
+                      className={`text-4xl transition-colors ${i < ratingStars ? 'text-yellow-400' : 'text-gray-300'}`}
+                    >
+                      <span className="material-icons">{i < ratingStars ? 'star' : 'star_border'}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-muted mb-2">Comentario (opcional)</label>
+                <textarea
+                  disabled={submittingRating}
+                  className="w-full px-4 py-2 bg-bg border border-border rounded-xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary h-24 disabled:opacity-50"
+                  placeholder="Comparte tu experiencia..."
+                  value={ratingComment}
+                  onChange={(e) => setRatingComment(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setShowRatingModal(false); setRatingStars(0); setRatingComment(''); }}
+                  className="px-4 py-2 rounded-xl text-muted hover:bg-bg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingRating}
+                  className="px-6 py-2 bg-primary text-white rounded-xl hover:bg-primary-dark transition-colors font-bold shadow-sm disabled:opacity-50"
+                >
+                  {submittingRating ? 'Enviando...' : 'Enviar calificación'}
                 </button>
               </div>
             </form>

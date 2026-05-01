@@ -11,6 +11,7 @@ export default function ReventaListings() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [cardPhotoIndices, setCardPhotoIndices] = useState<Record<string, number>>({});
+  const [sort, setSort] = useState('newest');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -28,15 +29,13 @@ export default function ReventaListings() {
       }
 
       const { data: listingsData, error: listingsError } = await query;
-      if (listingsError) console.error('Error fetching listings:', listingsError);
-      else setListings(listingsData || []);
+      if (!listingsError) setListings(listingsData || []);
 
       if (userId) {
         const favIds = await fetchFavoriteIds().catch(() => [] as string[]);
         setFavoriteIds(new Set(favIds.map(String)));
       }
     } catch (e) {
-      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -47,14 +46,22 @@ export default function ReventaListings() {
   }, [loadData]);
 
   const filteredListings = useMemo(() => {
-    return listings.filter(item => {
+    let result = listings.filter(item => {
       const matchesSearch = !searchText ||
         item.title?.toLowerCase().includes(searchText.toLowerCase()) ||
         item.author?.toLowerCase().includes(searchText.toLowerCase());
       const matchesCategory = !selectedCategory || item.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [listings, searchText, selectedCategory]);
+    if (sort === 'price_asc') {
+      result = [...result].sort((a, b) => (a.price || 0) - (b.price || 0));
+    } else if (sort === 'price_desc') {
+      result = [...result].sort((a, b) => (b.price || 0) - (a.price || 0));
+    } else if (sort === 'newest') {
+      result = [...result].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    }
+    return result;
+  }, [listings, searchText, selectedCategory, sort]);
 
   const handleToggleFavorite = async (e: React.MouseEvent, listingId: string) => {
     e.stopPropagation();
@@ -74,7 +81,6 @@ export default function ReventaListings() {
     try {
       await toggleFavorite(listingId, isFav);
     } catch (err: any) {
-      console.error('Error toggling favorite:', err);
       setFavoriteIds(prev => {
         const next = new Set(prev);
         if (isFav) next.add(listingId);
@@ -130,22 +136,32 @@ export default function ReventaListings() {
         />
         <select
           className="px-4 py-2 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white"
-          value={selectedCategory}
-          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCategory(e.target.value)}
+          value={sort}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSort(e.target.value)}
         >
-          <option value="">Todas las categorías</option>
-          {CATEGORIES.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
+          <option value="newest">Más recientes</option>
+          <option value="price_asc">Precio: menor a mayor</option>
+          <option value="price_desc">Precio: mayor a menor</option>
         </select>
-        <button
-          onClick={() => window.location.href = '/favoritos'}
-          className="flex items-center justify-center gap-2 px-4 py-2 border border-border rounded-lg text-muted hover:text-primary hover:border-primary transition-colors bg-white shrink-0"
-          title="Mis Favoritos"
-        >
-          <span className="material-icons">favorite</span>
-          <span className="text-sm font-medium md:hidden">Favoritos</span>
-        </button>
+        <div className="flex gap-4">
+          <select
+            className="px-4 py-2 border border-border rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white grow"
+            value={selectedCategory}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCategory(e.target.value)}
+          >
+            <option value="">Todas las categorías</option>
+            {CATEGORIES.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => window.location.href = '/favoritos'}
+            className="flex items-center justify-center px-4 py-2 border border-border rounded-lg text-muted hover:text-primary hover:border-primary transition-colors bg-white shrink-0"
+            title="Mis Favoritos"
+          >
+            <span className="material-icons">favorite</span>
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -172,13 +188,13 @@ export default function ReventaListings() {
                   <>
                     <button
                       onClick={(e) => prevCardPhoto(e, listing.id)}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity backdrop-blur-sm"
                     >
                       <span className="material-icons text-sm">chevron_left</span>
                     </button>
                     <button
                       onClick={(e) => nextCardPhoto(e, listing.id)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity backdrop-blur-sm"
                     >
                       <span className="material-icons text-sm">chevron_right</span>
                     </button>

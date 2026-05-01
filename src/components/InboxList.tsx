@@ -19,7 +19,6 @@ export default function InboxList() {
         const data = await fetchUserConversations();
         setConversations(data);
       } catch (e) {
-        console.error(e);
       } finally {
         setLoading(false);
       }

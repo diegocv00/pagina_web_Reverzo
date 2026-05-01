@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 
 const CATEGORIES = ['Matemáticas', 'Física', 'Química', 'Clásicos', 'Fantasía', 'Ciencia Ficción', 'Misterio', 'Thriller', 'Romance', 'Poesía', 'Cuento', 'Ensayo', 'Novela', 'Biografía', 'Historia', 'Filosofía', 'Psicología', 'Autoayuda', 'Economía', 'Negocios', 'Finanzas', 'Derecho', 'Salud', 'Arte', 'Diseño', 'Arquitectura', 'Música', 'Cocina', 'Viajes', 'Deportes', 'Infantil', 'Juvenil', 'Cómic', 'Manga', 'Tecnología', 'Programación', 'Idiomas', 'Académico', 'Otros'];
 const CONDITIONS = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
+const SHIPPING_OPTIONS = ['Gratis', 'A cargo del vendedor', 'A cargo del comprador'];
 
 export default function PublishListing() {
   const [loading, setLoading] = useState(false);
@@ -10,11 +11,13 @@ export default function PublishListing() {
     title: '',
     author: '',
     editorial: '',
+    isbn: '',
     price: '',
     category: '',
     condition: '',
     description: '',
-    location: ''
+    location: '',
+    shippingOption: ''
   });
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
@@ -58,6 +61,10 @@ export default function PublishListing() {
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
+    if (images.length === 0) {
+      alert('Por favor, sube al menos una foto del libro.');
+      return;
+    }
     setLoading(true);
     
     try {
@@ -88,6 +95,8 @@ export default function PublishListing() {
       const { error } = await supabase.from('listings').insert({
         ...form,
         price: parseInt(form.price),
+        isbn: form.isbn.trim() || null,
+        shipping_option: form.shippingOption || null,
         seller_id: user.id,
         photo_url: coverUrl,
         photos: photos.length > 0 ? photos : null,
@@ -106,7 +115,7 @@ export default function PublishListing() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-card p-8 rounded-3xl border border-border shadow-sm">
+    <div className="max-w-2xl mx-auto bg-card p-4 sm:p-8 rounded-3xl border border-border shadow-sm">
       <h2 className="text-2xl font-bold mb-6 text-text">Vender un libro</h2>
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -128,6 +137,28 @@ export default function PublishListing() {
               className="w-full px-4 py-2 border border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-bg"
               value={form.author}
               onChange={(e) => setForm({...form, author: e.target.value})}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-text mb-1">Editorial</label>
+            <input
+              type="text"
+              className="w-full px-4 py-2 border border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-bg"
+              value={form.editorial}
+              onChange={(e) => setForm({...form, editorial: e.target.value})}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text mb-1">ISBN</label>
+            <input
+              type="text"
+              placeholder="Opcional"
+              className="w-full px-4 py-2 border border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-bg"
+              value={form.isbn}
+              onChange={(e) => setForm({...form, isbn: e.target.value})}
             />
           </div>
         </div>
@@ -235,8 +266,22 @@ export default function PublishListing() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text mb-1">Descripción</label>
+          <label className="block text-sm font-medium text-text mb-1">Opción de envío</label>
+          <select
+            required
+            className="w-full px-4 py-2 border border-border rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent outline-none bg-bg"
+            value={form.shippingOption}
+            onChange={(e) => setForm({...form, shippingOption: e.target.value})}
+          >
+            <option value="">Selecciona una opción</option>
+            {SHIPPING_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text mb-1">Descripción *</label>
           <textarea
+            required
             className="w-full px-4 py-2 bg-bg border border-border rounded-xl outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary h-32"
             value={form.description}
             onChange={(e) => setForm({...form, description: e.target.value})}

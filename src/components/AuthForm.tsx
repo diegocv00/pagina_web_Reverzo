@@ -71,7 +71,6 @@ export default function AuthForm() {
             birth_date: userType === 'persona' ? birthDate : null,
             status: 'pending',
           });
-          if (profileError) console.error('Error creating profile:', profileError);
         }
 
         setMessage({ type: 'success', text: 'Registro exitoso. Revisa tu correo electrónico.' });

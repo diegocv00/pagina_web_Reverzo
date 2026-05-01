@@ -6,6 +6,9 @@ export default function UserProfile() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [listings, setListings] = useState<any[]>([]);
+  const [ratings, setRatings] = useState<any[]>([]);
+  const [loadingRatings, setLoadingRatings] = useState(false);
+  const [isOwnProfile, setIsOwnProfile] = useState(true);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editBio, setEditBio] = useState('');
@@ -17,26 +20,63 @@ export default function UserProfile() {
     async function loadProfile() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // Check if viewing another user's profile via URL parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetUserId = urlParams.get('userId');
+      const profileId = targetUserId || user?.id;
+      const isOwn = !targetUserId || targetUserId === user?.id;
+      setIsOwnProfile(isOwn);
+
       if (user) {
         setUser(user);
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', profileId)
           .single();
 
         setProfile(profileData || { full_name: user.email?.split('@')[0] || 'Usuario' });
 
-        const { data: listingsData } = await supabase
-          .from('listings')
-          .select('*')
-          .eq('seller_id', user.id)
-          .order('created_at', { ascending: false });
+        const [{ data: listingsData }, { data: ratingsData, error: ratingsError }] = await Promise.all([
+          supabase
+            .from('listings')
+            .select('*')
+            .eq('seller_id', profileId)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('ratings')
+            .select('*')
+            .eq('seller_id', profileId)
+            .order('created_at', { ascending: false })
+        ]);
+
 
         if (listingsData) {
           setListings(listingsData);
         }
-      } else {
+        if (ratingsData && ratingsData.length > 0) {
+          // Fetch reviewer profiles separately
+          const reviewerIds = Array.from(new Set(ratingsData.map(r => r.reviewer_id)));
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .in('id', reviewerIds);
+          
+          const profileMap = (profiles || []).reduce((acc: any, p: any) => {
+            acc[p.id] = p;
+            return acc;
+          }, {});
+
+          const ratingsWithProfiles = ratingsData.map(r => ({
+            ...r,
+            profiles: profileMap[r.reviewer_id] || null
+          }));
+          setRatings(ratingsWithProfiles);
+        } else {
+          setRatings([]);
+        }
+      } else if (!targetUserId) {
         window.location.href = '/auth';
       }
       setLoading(false);
@@ -122,28 +162,30 @@ export default function UserProfile() {
             <div>
               <h2 className="text-2xl font-bold text-text">{profile?.full_name || 'Usuario'}</h2>
               {profile?.bio && <p className="text-sm text-muted mt-1">{profile.bio}</p>}
-              <p className="text-muted text-sm">{user?.email}</p>
+              {isOwnProfile && <p className="text-muted text-sm">{user?.email}</p>}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setEditName(profile?.full_name || '');
-                  setEditBio(profile?.bio || '');
-                  setEditAvatarPreview(null);
-                  setEditAvatarFile(null);
-                  setIsEditModalOpen(true);
-                }}
-                className="bg-primary/10 text-primary font-bold px-4 py-2 rounded-xl hover:bg-primary/20 transition-colors"
-              >
-                Editar perfil
-              </button>
-              <button
-                onClick={handleLogout}
-                className="bg-danger/10 text-danger font-bold px-4 py-2 rounded-xl hover:bg-danger/20 transition-colors"
-              >
-                Cerrar sesión
-              </button>
-            </div>
+            {isOwnProfile && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setEditName(profile?.full_name || '');
+                    setEditBio(profile?.bio || '');
+                    setEditAvatarPreview(null);
+                    setEditAvatarFile(null);
+                    setIsEditModalOpen(true);
+                  }}
+                  className="bg-primary/10 text-primary font-bold px-4 py-2 rounded-xl hover:bg-primary/20 transition-colors"
+                >
+                  Editar perfil
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="bg-danger/10 text-danger font-bold px-4 py-2 rounded-xl hover:bg-danger/20 transition-colors"
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-border pt-6 grid grid-cols-3 gap-4 text-center">
@@ -156,15 +198,19 @@ export default function UserProfile() {
               <p className="text-xs text-muted font-medium uppercase tracking-wider">Vendidos</p>
             </div>
             <div className="p-4 bg-bg rounded-2xl">
-              <p className="text-2xl font-bold text-primary">5.0</p>
-              <p className="text-xs text-muted font-medium uppercase tracking-wider">Calificación</p>
+              <p className="text-2xl font-bold text-primary">
+                {ratings.length > 0
+                  ? (ratings.reduce((sum, r) => sum + (r.stars || 0), 0) / ratings.length).toFixed(1)
+                  : '—'}
+              </p>
+              <p className="text-xs text-muted font-medium uppercase tracking-wider">Valoración</p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="mt-8 mb-12">
-        <h3 className="text-xl font-bold text-text mb-4">Mis libros publicados</h3>
+        <h3 className="text-xl font-bold text-text mb-4">{isOwnProfile ? 'Mis libros publicados' : 'Libros publicados'}</h3>
         {listings.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
             {listings.map(listing => (
@@ -195,6 +241,49 @@ export default function UserProfile() {
           <div className="text-center py-10 bg-card rounded-2xl border border-border">
             <span className="material-icons text-4xl text-muted/30 mb-2">menu_book</span>
             <p className="text-muted">No has publicado ningún libro todavía.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Valoraciones received */}
+      <div className="mt-8 mb-12">
+        <h3 className="text-xl font-bold text-text mb-4">{isOwnProfile ? 'Mis valoraciones' : 'Valoraciones'}</h3>
+        {ratings.length > 0 ? (
+          <div className="space-y-4">
+            {ratings.map((rating) => (
+              <div key={rating.id} className="bg-card rounded-2xl p-4 border border-border">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200">
+                    {rating.profiles?.avatar_url ? (
+                      <img src={rating.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-primary/30">
+                        <span className="material-icons text-sm">person</span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-text">{rating.profiles?.full_name || 'Usuario'}</p>
+                    <p className="text-[10px] text-muted">{new Date(rating.created_at).toLocaleDateString('es-CO')}</p>
+                  </div>
+                  <div className="ml-auto flex items-center gap-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <span key={i} className={`material-icons text-sm ${i < (rating.stars || 0) ? 'text-yellow-400' : 'text-gray-300'}`}>
+                        {i < (rating.stars || 0) ? 'star' : 'star_border'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {rating.comment && (
+                  <p className="text-sm text-muted leading-relaxed">{rating.comment}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-10 bg-card rounded-2xl border border-border">
+            <span className="material-icons text-4xl text-muted/30 mb-2">star_border</span>
+            <p className="text-muted">Aún no tienes calificaciones.</p>
           </div>
         )}
       </div>

@@ -49,7 +49,6 @@ export default function CommunitiesList() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching communities:', error);
       } else {
         setCommunities(data || []);
         const avatarMap: Record<string, any[]> = {};

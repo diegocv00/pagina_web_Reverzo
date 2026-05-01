@@ -18,7 +18,7 @@ const profileItem = { name: "Perfil", href: "/perfil", icon: "person" };
           <img
             src="/titulo.png"
             alt="Reverzo"
-            class="h-22 w-auto hidden xs:block"
+            class="h-22 w-auto sm:hidden"
           />
         </a>
         <div class="hidden sm:flex sm:flex-1 sm:justify-around sm:items-center h-full">
@@ -68,8 +68,8 @@ const profileItem = { name: "Perfil", href: "/perfil", icon: "person" };
         </div>
       </div>
 
-      <!-- Mobile menu button (simple for now) -->
-      <div class="flex items-center sm:hidden">
+      <!-- Mobile menu button -->
+      <div class="flex items-center sm:hidden gap-3">
         <button
           type="button"
           class="text-muted hover:text-primary focus:outline-none"

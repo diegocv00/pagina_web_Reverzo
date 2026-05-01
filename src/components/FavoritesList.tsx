@@ -19,7 +19,6 @@ export default function FavoritesList() {
         const data = await fetchFavorites();
         setListings(data || []);
       } catch (err) {
-        console.error('Error fetching favorites:', err);
       }
       setLoading(false);
     }
@@ -31,7 +30,6 @@ export default function FavoritesList() {
       await toggleFavorite(id, true);
       setListings((prev) => prev.filter((l) => l.id !== id));
     } catch (err) {
-      console.error('Error removing favorite:', err);
       alert('No se pudo eliminar el favorito. Inténtalo de nuevo.');
     }
   };
