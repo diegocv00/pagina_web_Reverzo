@@ -1,0 +1,10 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ChatWindow from '../components/ChatWindow';
+---
+
+<Layout title="Chat">
+  <div class="max-w-4xl mx-auto py-4">
+    <ChatWindow client:only="react" />
+  </div>
+</Layout>

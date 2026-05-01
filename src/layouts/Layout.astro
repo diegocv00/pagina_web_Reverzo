@@ -1,0 +1,55 @@
+---
+import "../styles/global.css";
+import Navbar from "../components/Navbar.astro";
+
+interface Props {
+	title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+	<head>
+		<meta charset="UTF-8" />
+		<meta
+			name="description"
+			content="Reverzo - Tu mercadillo de confianza"
+		/>
+		<meta name="viewport" content="width=device-width" />
+		<link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
+		<link rel="icon" type="image/png" sizes="192x192" href="/logo.png" />
+		<link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title} | Reverzo</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body class="min-h-screen flex flex-col">
+		<Navbar />
+		<main class="grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+			<slot />
+		</main>
+		<footer class="bg-card border-t border-border py-8 mt-12">
+			<div
+				class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-muted"
+			>
+				<p>
+					&copy; {new Date().getFullYear()} Reverzo. Todos los derechos
+					reservados.
+				</p>
+			</div>
+		</footer>
+	</body>
+</html>
+
+<style is:global>
+	:root {
+		font-family: "Inter", sans-serif;
+	}
+</style>

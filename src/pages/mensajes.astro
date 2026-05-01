@@ -1,0 +1,13 @@
+---
+import Layout from '../layouts/Layout.astro';
+import InboxList from '../components/InboxList';
+---
+
+<Layout title="Mis mensajes">
+  <div class="mb-8 text-center">
+    <h1 class="text-3xl font-bold text-text mb-2">Mis mensajes</h1>
+    <p class="text-muted">Gestiona tus conversaciones sobre libros.</p>
+  </div>
+
+  <InboxList client:load />
+</Layout>

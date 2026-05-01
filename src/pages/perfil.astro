@@ -1,0 +1,10 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UserProfile from '../components/UserProfile';
+---
+
+<Layout title="Mi perfil">
+  <div class="py-4">
+    <UserProfile client:load />
+  </div>
+</Layout>

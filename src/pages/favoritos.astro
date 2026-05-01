@@ -1,0 +1,10 @@
+---
+import Layout from '../layouts/Layout.astro';
+import FavoritesList from '../components/FavoritesList';
+---
+
+<Layout title="Mis Favoritos">
+  <div class="py-4">
+    <FavoritesList client:load />
+  </div>
+</Layout>

@@ -1,0 +1,28 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ShippingCalculator from '../components/ShippingCalculator';
+---
+
+<Layout title="Costos de envío">
+    <div class="max-w-4xl mx-auto py-12 px-4">
+        <div class="text-center mb-12">
+            <span class="material-icons text-6xl text-primary/30 mb-4 block">local_shipping</span>
+            <h1 class="text-4xl font-bold text-text mb-4">Calculadora de envíos</h1>
+            <p class="text-muted text-lg max-w-2xl mx-auto">Conoce un valor aproximado de las tarifas de envío (basado en parámetros logísticos colombianos) para calcular el costo total de tus compras y ventas.</p>
+        </div>
+
+        <ShippingCalculator client:load />
+
+        <div class="mt-12 bg-bg p-8 rounded-3xl border border-border">
+            <h3 class="text-xl font-bold text-text mb-4 flex items-center gap-2">
+                <span class="material-icons text-primary">info</span>
+                Importante
+            </h3>
+            <ul class="text-muted text-sm space-y-3 pl-8 list-disc">
+                <li>Los valores mostrados son <strong>estimaciones automáticas</strong> y pueden variar según la empresa de mensajería (Interrapidisimo, Servientrega, Envia, etc).</li>
+                <li>Siempre empaca tus libros de forma segura en cajas resistentes o plástico burbuja.</li>
+                <li>Recuerda acordar con el vendedor o comprador quién asumirá el costo total del envío antes de realizar la transacción.</li>
+            </ul>
+        </div>
+    </div>
+</Layout>

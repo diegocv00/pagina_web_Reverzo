@@ -1,0 +1,12 @@
+---
+import Layout from "../layouts/Layout.astro";
+import ReventaListings from "../components/ReventaListings";
+---
+
+<Layout title="Mercadillo">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-text mb-2">Mercadillo literario</h1>
+  </div>
+
+  <ReventaListings client:load />
+</Layout>

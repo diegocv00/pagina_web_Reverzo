@@ -1,0 +1,140 @@
+---
+const navItemsMain = [
+  { name: "Mercadillo", href: "/", icon: "shopping_bag" },
+  { name: "Publicar", href: "/publicar", icon: "add_circle" },
+  { name: "Comunidades", href: "/comunidades", icon: "groups" },
+  { name: "Mensajes", href: "/mensajes", icon: "chat_bubble" },
+];
+
+const profileItem = { name: "Perfil", href: "/perfil", icon: "person" };
+---
+
+<nav class="bg-card border-b border-border sticky top-0 z-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between h-20">
+      <div class="flex items-center flex-1">
+        <a href="/" class="shrink-0 flex items-center gap-4 mr-4">
+          <img src="/logo.png" alt="Logo" class="h-22 w-auto" />
+          <img
+            src="/titulo.png"
+            alt="Reverzo"
+            class="h-22 w-auto hidden xs:block"
+          />
+        </a>
+        <div class="hidden sm:flex sm:flex-1 sm:justify-around sm:items-center h-full">
+          {
+            navItemsMain.map((item) => (
+              <a
+                href={item.href}
+                class="inline-flex items-center justify-center px-2 pt-1 border-b-2 border-transparent text-sm font-medium text-muted hover:text-primary hover:border-primary transition-colors h-full flex-1 text-center"
+              >
+                {item.name}
+              </a>
+            ))
+          }
+          <!-- Dropdown Info -->
+          <div class="relative group h-full flex items-center flex-1 justify-center">
+            <button
+              class="inline-flex items-center justify-center px-2 border-b-2 border-transparent text-sm font-medium text-muted group-hover:text-primary group-hover:border-primary transition-colors h-full outline-none w-full"
+            >
+              Ayuda <span class="material-icons text-sm ml-1">expand_more</span>
+            </button>
+            <div
+              class="absolute hidden group-hover:block top-full left-0 w-48 bg-card border border-border shadow-lg rounded-b-xl overflow-hidden"
+            >
+              <a
+                href="/vendedores"
+                class="block px-4 py-3 text-sm text-muted hover:bg-bg hover:text-primary transition-colors"
+                >Consejos vendedores</a
+              >
+              <a
+                href="/compradores"
+                class="block px-4 py-3 text-sm text-muted hover:bg-bg hover:text-primary transition-colors"
+                >Consejos compradores</a
+              >
+              <a
+                href="/envios"
+                class="block px-4 py-3 text-sm text-muted hover:bg-bg hover:text-primary transition-colors"
+                >Costos de envío</a
+              >
+            </div>
+          </div>
+          <a
+            href={profileItem.href}
+            class="inline-flex items-center justify-center px-2 pt-1 border-b-2 border-transparent text-sm font-medium text-muted hover:text-primary hover:border-primary transition-colors h-full flex-1 text-center"
+          >
+            {profileItem.name}
+          </a>
+        </div>
+      </div>
+
+      <!-- Mobile menu button (simple for now) -->
+      <div class="flex items-center sm:hidden">
+        <button
+          type="button"
+          class="text-muted hover:text-primary focus:outline-none"
+          id="mobile-menu-button"
+        >
+          <span class="material-icons">menu</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile menu -->
+  <div class="sm:hidden hidden border-t border-border bg-card" id="mobile-menu">
+    <div class="pt-2 pb-3 space-y-1">
+      {
+        navItemsMain.map((item) => (
+          <a
+            href={item.href}
+            class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-muted hover:bg-bg hover:text-primary hover:border-primary"
+          >
+            {item.name}
+          </a>
+        ))
+      }
+      <div class="border-t border-border mt-2 pt-2">
+        <p
+          class="px-4 py-2 text-xs font-bold text-muted uppercase tracking-wider"
+        >
+          Ayuda y Envíos
+        </p>
+        <a
+          href="/vendedores"
+          class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-muted hover:bg-bg hover:text-primary hover:border-primary"
+          >Consejos vendedores</a
+        >
+        <a
+          href="/compradores"
+          class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-muted hover:bg-bg hover:text-primary hover:border-primary"
+          >Consejos compradores</a
+        >
+        <a
+          href="/envios"
+          class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-muted hover:bg-bg hover:text-primary hover:border-primary"
+          >Costos de envío</a
+        >
+      </div>
+      <a
+        href={profileItem.href}
+        class="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-muted hover:bg-bg hover:text-primary hover:border-primary"
+      >
+        {profileItem.name}
+      </a>
+    </div>
+  </div>
+</nav>
+
+<script>
+  const btn = document.getElementById("mobile-menu-button");
+  const menu = document.getElementById("mobile-menu");
+
+  btn?.addEventListener("click", () => {
+    menu?.classList.toggle("hidden");
+  });
+</script>
+
+<style>
+  @import url("https://fonts.googleapis.com/icon?family=Material+Icons");
+</style>

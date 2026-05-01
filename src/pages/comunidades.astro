@@ -1,0 +1,13 @@
+---
+import Layout from '../layouts/Layout.astro';
+import CommunitiesList from '../components/CommunitiesList';
+---
+
+<Layout title="Comunidades">
+  <div className="mb-8">
+    <h1 class="text-3xl font-bold text-text mb-2">Comunidades</h1>
+    <p class="text-muted">Únete a clubes de lectura y comparte tu pasión.</p>
+  </div>
+
+  <CommunitiesList client:load />
+</Layout>
