@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { sendReportEmail } from '../lib/email';
 
 const CATEGORIES = ['Matemáticas', 'Física', 'Química', 'Clásicos', 'Fantasía', 'Ciencia Ficción', 'Misterio', 'Thriller', 'Romance', 'Poesía', 'Cuento', 'Ensayo', 'Novela', 'Biografía', 'Historia', 'Filosofía', 'Psicología', 'Autoayuda', 'Economía', 'Negocios', 'Finanzas', 'Derecho', 'Salud', 'Arte', 'Diseño', 'Arquitectura', 'Música', 'Cocina', 'Viajes', 'Deportes', 'Infantil', 'Juvenil', 'Cómic', 'Manga', 'Tecnología', 'Programación', 'Idiomas', 'Académico', 'Otros'];
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=800&auto=format&fit=crop';
 
 export default function ListingDetail() {
   const [listing, setListing] = useState<any>(null);
@@ -22,6 +23,9 @@ export default function ListingDetail() {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [sellerRating, setSellerRating] = useState({ avg: 0, count: 0 });
   const [loadingRatings, setLoadingRatings] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<Record<number, boolean>>({});
+  const [errorImages, setErrorImages] = useState<Record<number, boolean>>({});
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const id = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
 
@@ -150,13 +154,34 @@ export default function ListingDetail() {
   const isMine = currentUser?.id === listing.seller_id;
 
   const getOptimizedImageUrl = (url: string): string => {
-    if (!url) return url;
+    if (!url) return FALLBACK_IMAGE;
     if (url.includes('.supabase.co/storage/v1/object/public/')) {
       const separator = url.includes('?') ? '&' : '?';
-      return `${url}${separator}width=800&resize=contain`;
+      return `${url}${separator}width=1200&resize=contain`;
     }
     return url;
   };
+
+  const handleImageLoad = (idx: number) => {
+    setLoadedImages(prev => ({ ...prev, [idx]: true }));
+  };
+
+  const handleImageError = (idx: number) => {
+    setErrorImages(prev => ({ ...prev, [idx]: true }));
+  };
+
+  const preloadAdjacentImages = useCallback((currentIdx: number, photos: string[]) => {
+    if (photos.length <= 1) return;
+    const preloadIndices = [];
+    for (let i = 1; i <= 2; i++) {
+      preloadIndices.push((currentIdx + i) % photos.length);
+      preloadIndices.push((currentIdx - i + photos.length) % photos.length);
+    }
+    preloadIndices.forEach(idx => {
+      const img = new Image();
+      img.src = getOptimizedImageUrl(photos[idx]);
+    });
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto py-8">
@@ -172,31 +197,41 @@ export default function ListingDetail() {
             {(() => {
                 const photos = (listing.photos && Array.isArray(listing.photos) && listing.photos.length > 0)
                     ? listing.photos
-                    : [listing.photo_url || 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=400&auto=format&fit=crop'];
+                    : [listing.photo_url || FALLBACK_IMAGE];
                 const hasMultiple = photos.length > 1;
                 return (
                     <>
                         <div className="relative w-full h-full min-h-[60vh] overflow-hidden bg-black/5">
                             <div
+                                ref={scrollContainerRef}
                                 id="photo-scroll"
                                 className="w-full h-full overflow-x-auto snap-x snap-mandatory flex scroll-smooth"
                                 style={{ scrollBehavior: 'smooth', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                                 onScroll={(e) => {
                                     const el = e.currentTarget;
                                     const idx = Math.round(el.scrollLeft / el.clientWidth);
-                                    setActivePhotoIndex(idx);
+                                    if (idx !== activePhotoIndex) {
+                                        setActivePhotoIndex(idx);
+                                        preloadAdjacentImages(idx, photos);
+                                    }
                                 }}
                             >
                                 {photos.map((url: string, idx: number) => (
                                     <div key={idx} className="w-full h-full shrink-0 snap-center flex items-center justify-center bg-black/5">
+                                        {!loadedImages[idx] && idx !== 0 && (
+                                            <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse" />
+                                        )}
                                         <img
-                                            src={getOptimizedImageUrl(url)}
+                                            src={errorImages[idx] ? FALLBACK_IMAGE : getOptimizedImageUrl(url)}
                                             alt={`${listing.title} ${idx + 1}`}
                                             loading={idx === 0 ? 'eager' : 'lazy'}
                                             decoding="async"
-                                            width="800"
-                                            height="1067"
-                                            className="w-full min-h-[30vh] sm:min-h-[40vh] md:min-h-[50vh] lg:min-h-[60vh] object-contain bg-slate-100 cursor-pointer"
+                                            fetchpriority={idx === 0 ? 'high' : 'auto'}
+                                            width="1200"
+                                            height="1600"
+                                            onLoad={() => handleImageLoad(idx)}
+                                            onError={() => handleImageError(idx)}
+                                            className={`w-full min-h-[30vh] sm:min-h-[40vh] md:min-h-[50vh] lg:min-h-[60vh] object-contain bg-slate-100 cursor-pointer transition-opacity duration-300 ${loadedImages[idx] ? 'opacity-100' : 'opacity-0'}`}
                                             onClick={() => setFullscreenImage(url)}
                                         />
                                     </div>

@@ -1,6 +1,8 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchFavoriteIds, toggleFavorite } from '../lib/favorites';
+
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=400&auto=format&fit=crop';
 
 const CATEGORIES = ['Matemáticas', 'Física', 'Química', 'Clásicos', 'Fantasía', 'Ciencia Ficción', 'Misterio', 'Thriller', 'Romance', 'Poesía', 'Cuento', 'Ensayo', 'Novela', 'Biografía', 'Historia', 'Filosofía', 'Psicología', 'Autoayuda', 'Economía', 'Negocios', 'Finanzas', 'Derecho', 'Salud', 'Arte', 'Diseño', 'Arquitectura', 'Música', 'Cocina', 'Viajes', 'Deportes', 'Infantil', 'Juvenil', 'Cómic', 'Manga', 'Tecnología', 'Programación', 'Idiomas', 'Académico', 'Otros'];
 
@@ -11,6 +13,8 @@ export default function ReventaListings() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [cardPhotoIndices, setCardPhotoIndices] = useState<Record<string, number>>({});
+  const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
+  const [errorImages, setErrorImages] = useState<Record<string, boolean>>({});
   const [sort, setSort] = useState('newest');
 
   const [listingsOffset, setListingsOffset] = useState(0);
@@ -138,17 +142,15 @@ export default function ReventaListings() {
     if (listing.photos && Array.isArray(listing.photos) && listing.photos.length > 0) {
       return listing.photos;
     }
-    return [listing.photo_url || 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=400&auto=format&fit=crop'];
+    return [listing.photo_url || FALLBACK_IMAGE];
   };
 
   const getThumbnailUrl = (url: string): string => {
-    if (!url) return url;
-    // Supabase Storage images: add resize params for thumbnails
+    if (!url) return FALLBACK_IMAGE;
     if (url.includes('.supabase.co/storage/v1/object/public/')) {
       const separator = url.includes('?') ? '&' : '?';
-      return `${url}${separator}width=400&resize=contain`;
+      return `${url}${separator}width=600&resize=contain`;
     }
-    // Unsplash already has params, external URLs pass through
     return url;
   };
 
@@ -172,6 +174,25 @@ export default function ReventaListings() {
       ...prev,
       [listingId]: (prev[listingId] || 0) >= photos.length - 1 ? 0 : (prev[listingId] || 0) + 1
     }));
+  };
+
+  const handleImageLoad = (listingId: string) => {
+    setLoadedImages(prev => ({ ...prev, [listingId]: true }));
+  };
+
+  const handleImageError = (listingId: string) => {
+    setErrorImages(prev => ({ ...prev, [listingId]: true }));
+  };
+
+  const preloadAdjacentImages = (listing: any, photoIdx: number) => {
+    const photos = getCardPhotos(listing);
+    if (photos.length <= 1) return;
+    const prevIdx = photoIdx === 0 ? photos.length - 1 : photoIdx - 1;
+    const nextIdx = photoIdx >= photos.length - 1 ? 0 : photoIdx + 1;
+    [photos[prevIdx], photos[nextIdx]].forEach(url => {
+      const img = new Image();
+      img.src = getThumbnailUrl(url);
+    });
   };
 
   return (
@@ -228,24 +249,22 @@ export default function ReventaListings() {
               return (
                 <div key={listing.id} onClick={() => handleCardClick(listing)} className="bg-card rounded-2xl border border-border overflow-hidden hover:shadow-md transition-shadow group cursor-pointer">
                   <div className="aspect-3/4 overflow-hidden relative bg-bg">
+                    {!loadedImages[listing.id] && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse" />
+                    )}
                     <img
-                      src={getThumbnailUrl(photos[photoIdx])}
+                      src={errorImages[listing.id] ? FALLBACK_IMAGE : getThumbnailUrl(photos[photoIdx])}
                       alt={listing.title}
                       loading="lazy"
                       decoding="async"
-                      width="400"
-                      height="533"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      width="600"
+                      height="800"
+                      onLoad={() => handleImageLoad(listing.id)}
+                      onError={() => handleImageError(listing.id)}
+                      onAnimationStart={() => preloadAdjacentImages(listing, photoIdx)}
+                      className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${loadedImages[listing.id] ? 'opacity-100' : 'opacity-0'}`}
+                      style={{ transition: 'opacity 0.3s ease-in-out, transform 0.3s ease' }}
                     />
-                    {/* Preload next carousel image for instant switching */}
-                    {hasMultiplePhotos && (
-                      <link
-                        rel="preload"
-                        as="image"
-                        href={getThumbnailUrl(photos[(photoIdx + 1) % photos.length])}
-                        className="hidden"
-                      />
-                    )}
 
                     {/* Navigation arrows */}
                     {hasMultiplePhotos && (

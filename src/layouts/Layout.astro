@@ -4,31 +4,58 @@ import Navbar from "../components/Navbar.astro";
 
 interface Props {
 	title: string;
+	description?: string;
 }
 
-const { title } = Astro.props;
+const { title, description = "Reverzo - Tu mercadillo de confianza para comprar y vender libros de segunda mano de forma segura." } = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const socialImageURL = new URL("/og-image.png", Astro.site);
 ---
 
 <!doctype html>
 <html lang="es">
 	<head>
 		<meta charset="UTF-8" />
-		<meta
-			name="description"
-			content="Reverzo - Tu mercadillo de confianza"
-		/>
 		<meta name="viewport" content="width=device-width" />
 		<link rel="icon" type="image/png" sizes="32x32" href="/logo.png" />
 		<link rel="icon" type="image/png" sizes="192x192" href="/logo.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
 		<meta name="generator" content={Astro.generator} />
+
 		<title>{title} | Reverzo</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonicalURL} />
+
+		<meta name="theme-color" content="#6366f1" />
+
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content={canonicalURL} />
+		<meta property="og:title" content={`${title} | Reverzo`} />
+		<meta property="og:description" content={description} />
+		<meta property="og:image" content={socialImageURL} />
+
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:url" content={canonicalURL} />
+		<meta name="twitter:title" content={`${title} | Reverzo`} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={socialImageURL} />
+
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link
 			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
 			rel="stylesheet"
 		/>
+
+		<script type="application/ld+json" set:html={JSON.stringify({
+			"@context": "https://schema.org",
+			"@type": "Organization",
+			"name": "Reverzo",
+			"url": Astro.site,
+			"description": "Mercadillo de confianza para comprar y vender libros de segunda mano",
+			"logo": new URL("/logo.png", Astro.site).href
+		})} />
 	</head>
 	<body class="min-h-screen flex flex-col">
 		<Navbar />
