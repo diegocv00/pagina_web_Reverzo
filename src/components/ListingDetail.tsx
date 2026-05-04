@@ -149,6 +149,15 @@ export default function ListingDetail() {
 
   const isMine = currentUser?.id === listing.seller_id;
 
+  const getOptimizedImageUrl = (url: string): string => {
+    if (!url) return url;
+    if (url.includes('.supabase.co/storage/v1/object/public/')) {
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}width=800&resize=contain`;
+    }
+    return url;
+  };
+
   return (
     <div className="max-w-5xl mx-auto py-8">
       <div className="flex items-center gap-2 mb-6 cursor-pointer text-muted hover:text-primary transition-colors" onClick={() => window.history.back()}>
@@ -157,7 +166,7 @@ export default function ListingDetail() {
       </div>
 
       <div className="bg-card rounded-3xl border border-border overflow-hidden grid grid-cols-1 md:grid-cols-2 shadow-sm">
-        
+
         {/* Lado Imagen */}
         <div className="bg-bg flex flex-col items-center justify-center p-0 md:p-0 relative min-h-[60vh]">
             {(() => {
@@ -181,8 +190,12 @@ export default function ListingDetail() {
                                 {photos.map((url: string, idx: number) => (
                                     <div key={idx} className="w-full h-full shrink-0 snap-center flex items-center justify-center bg-black/5">
                                         <img
-                                            src={url}
+                                            src={getOptimizedImageUrl(url)}
                                             alt={`${listing.title} ${idx + 1}`}
+                                            loading={idx === 0 ? 'eager' : 'lazy'}
+                                            decoding="async"
+                                            width="800"
+                                            height="1067"
                                             className="w-full min-h-[30vh] sm:min-h-[40vh] md:min-h-[50vh] lg:min-h-[60vh] object-contain bg-slate-100 cursor-pointer"
                                             onClick={() => setFullscreenImage(url)}
                                         />

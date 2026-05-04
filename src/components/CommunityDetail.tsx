@@ -15,6 +15,10 @@ export default function CommunityDetail() {
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const [postsOffset, setPostsOffset] = useState(0);
+  const [hasMorePosts, setHasMorePosts] = useState(true);
+  const [loadingMorePosts, setLoadingMorePosts] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showReportModal, setShowReportModal] = useState(false);
@@ -69,6 +73,10 @@ export default function CommunityDetail() {
           }
         }
 
+        // Reset pagination on community change
+        setPostsOffset(0);
+        setHasMorePosts(true);
+
         // Fetch posts
         const { data: postsData } = await supabase
           .from('community_posts')
@@ -77,12 +85,14 @@ export default function CommunityDetail() {
             profiles(full_name, avatar_url)
           `)
           .eq('community_id', id)
-          .order('created_at', { ascending: false }) // desc because it's a chat (newest bottom but array ordered)
-          .limit(50);
+          .order('created_at', { ascending: false })
+          .limit(25);
 
         if (postsData) {
           // Reverse to have oldest top, newest bottom visually for normal chat flow
-          setPosts(postsData.reverse());
+          const reversed = postsData.reverse();
+          setPosts(reversed);
+          setHasMorePosts(reversed.length === 25);
         }
 
         // Fetch members - separate lookup to avoid FK join issues
@@ -199,6 +209,34 @@ export default function CommunityDetail() {
       alert('Error al subir imagen: ' + err.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleLoadMorePosts = async () => {
+    if (!id || loadingMorePosts || !hasMorePosts) return;
+    setLoadingMorePosts(true);
+    try {
+      const newOffset = postsOffset + 25;
+      const { data: postsData } = await supabase
+        .from('community_posts')
+        .select(`
+          *,
+          profiles(full_name, avatar_url)
+        `)
+        .eq('community_id', id)
+        .order('created_at', { ascending: false })
+        .range(newOffset, newOffset + 24);
+
+      if (postsData && postsData.length > 0) {
+        const reversed = postsData.reverse();
+        setPosts(prev => [...reversed, ...prev]);
+        setPostsOffset(newOffset);
+      }
+      setHasMorePosts((postsData || []).length === 25);
+    } catch (e: any) {
+      alert('Error al cargar más mensajes');
+    } finally {
+      setLoadingMorePosts(false);
     }
   };
 
@@ -408,7 +446,19 @@ export default function CommunityDetail() {
                   <p className="text-muted text-sm">Aún no hay mensajes. ¡Sé el primero en saludar!</p>
                 </div>
               ) : (
-                posts.map(post => {
+                <>
+                  {hasMorePosts && (
+                    <div className="flex justify-center py-2">
+                      <button
+                        onClick={handleLoadMorePosts}
+                        disabled={loadingMorePosts}
+                        className="text-xs text-muted hover:text-primary font-medium px-3 py-1.5 rounded-full bg-bg border border-border hover:border-primary transition-colors disabled:opacity-50"
+                      >
+                        {loadingMorePosts ? 'Cargando...' : 'Cargar más mensajes'}
+                      </button>
+                    </div>
+                  )}
+                  {posts.map(post => {
                   const isMine = post.user_id === currentUserId;
                   return (
                     <div key={post.id} className={`flex w-full items-center ${isMine ? 'justify-end' : 'justify-start'} gap-2 group`}>
@@ -457,7 +507,8 @@ export default function CommunityDetail() {
                       </div>
                     </div>
                   );
-                })
+                })}
+                </>
               )}
             </div>
 

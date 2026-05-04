@@ -24,6 +24,10 @@ export default function ChatWindow() {
   const [ratingComment, setRatingComment] = useState('');
   const [submittingRating, setSubmittingRating] = useState(false);
 
+  const [messageOffset, setMessageOffset] = useState(0);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const conversationId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
@@ -34,6 +38,10 @@ export default function ChatWindow() {
       if (!user || !conversationId) return;
       setUserId(user.id);
 
+      // Reset pagination on conversation change
+      setMessageOffset(0);
+      setHasMoreMessages(true);
+
       const { data: conv } = await supabase
         .from('conversations')
         .select('*, listing:listings(title, seller_id, photo_url), buyer_profile:profiles!buyer_id(*), seller_profile:profiles!seller_id(*)')
@@ -41,8 +49,9 @@ export default function ChatWindow() {
         .single();
       setConversation(conv);
 
-      const msgs = await fetchMessages(conversationId);
+      const msgs = await fetchMessages(conversationId, 25, 0);
       setMessages(msgs);
+      setHasMoreMessages(msgs.length === 25);
       setLoading(false);
       markAsRead(conversationId);
 
@@ -52,7 +61,7 @@ export default function ChatWindow() {
           .from('ratings')
           .select('stars')
           .eq('seller_id', conv.listing.seller_id);
-        
+
         if (ratingData && ratingData.length > 0) {
           const avg = ratingData.reduce((sum: number, r: any) => sum + r.stars, 0) / ratingData.length;
           setSellerRating({ avg: Math.round(avg * 10) / 10, count: ratingData.length });
@@ -137,6 +146,24 @@ export default function ChatWindow() {
       alert('Error al subir imagen');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleLoadMoreMessages = async () => {
+    if (!conversationId || loadingMore || !hasMoreMessages) return;
+    setLoadingMore(true);
+    try {
+      const newOffset = messageOffset + 25;
+      const msgs = await fetchMessages(conversationId, 25, newOffset);
+      if (msgs.length > 0) {
+        setMessages(prev => [...msgs, ...prev]);
+        setMessageOffset(newOffset);
+      }
+      setHasMoreMessages(msgs.length === 25);
+    } catch (e) {
+      alert('Error al cargar más mensajes');
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -390,6 +417,17 @@ export default function ChatWindow() {
         ref={scrollRef}
         className="grow overflow-y-auto p-4 space-y-4 bg-bg/20"
       >
+        {messages.length > 0 && hasMoreMessages && (
+          <div className="flex justify-center py-2">
+            <button
+              onClick={handleLoadMoreMessages}
+              disabled={loadingMore}
+              className="text-xs text-muted hover:text-primary font-medium px-3 py-1.5 rounded-full bg-bg border border-border hover:border-primary transition-colors disabled:opacity-50"
+            >
+              {loadingMore ? 'Cargando...' : 'Cargar más mensajes'}
+            </button>
+          </div>
+        )}
         {messages.map(msg => {
           const isMe = msg.sender_id === userId;
           return (

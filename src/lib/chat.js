@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export async function fetchMessages(conversationId) {
+export async function fetchMessages(conversationId, limit = 25, offset = 0) {
     const { data, error } = await supabase
         .from('messages')
         .select(`
@@ -8,10 +8,12 @@ export async function fetchMessages(conversationId) {
             reply_message:messages!reply_to(content, sender_id)
         `)
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
 
     if (error) throw error;
-    return data || [];
+    // Reverse so oldest of the fetched batch is first (natural chat order)
+    return (data || []).reverse();
 }
 
 export async function sendMessage(conversationId, content, replyTo = null, imageUrl = null) {

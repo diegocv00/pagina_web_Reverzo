@@ -13,6 +13,10 @@ export default function ReventaListings() {
   const [cardPhotoIndices, setCardPhotoIndices] = useState<Record<string, number>>({});
   const [sort, setSort] = useState('newest');
 
+  const [listingsOffset, setListingsOffset] = useState(0);
+  const [hasMoreListings, setHasMoreListings] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -22,14 +26,19 @@ export default function ReventaListings() {
       let query = supabase
         .from('listings')
         .select('*, profiles:seller_id (full_name)')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(0, 24);
 
       if (userId) {
         query = query.neq('seller_id', userId);
       }
 
       const { data: listingsData, error: listingsError } = await query;
-      if (!listingsError) setListings(listingsData || []);
+      if (!listingsError) {
+        setListings(listingsData || []);
+        setHasMoreListings((listingsData || []).length === 25);
+      }
+      setListingsOffset(0);
 
       if (userId) {
         const favIds = await fetchFavoriteIds().catch(() => [] as string[]);
@@ -44,6 +53,36 @@ export default function ReventaListings() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMoreListings) return;
+    setLoadingMore(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || null;
+      const newOffset = listingsOffset + 25;
+
+      let query = supabase
+        .from('listings')
+        .select('*, profiles:seller_id (full_name)')
+        .order('created_at', { ascending: false })
+        .range(newOffset, newOffset + 24);
+
+      if (userId) {
+        query = query.neq('seller_id', userId);
+      }
+
+      const { data: listingsData, error: listingsError } = await query;
+      if (!listingsError && listingsData) {
+        setListings(prev => [...prev, ...listingsData]);
+        setHasMoreListings(listingsData.length === 25);
+        setListingsOffset(newOffset);
+      }
+    } catch (e) {
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const filteredListings = useMemo(() => {
     let result = listings.filter(item => {
@@ -100,6 +139,17 @@ export default function ReventaListings() {
       return listing.photos;
     }
     return [listing.photo_url || 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=400&auto=format&fit=crop'];
+  };
+
+  const getThumbnailUrl = (url: string): string => {
+    if (!url) return url;
+    // Supabase Storage images: add resize params for thumbnails
+    if (url.includes('.supabase.co/storage/v1/object/public/')) {
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}width=400&resize=contain`;
+    }
+    // Unsplash already has params, external URLs pass through
+    return url;
   };
 
   const prevCardPhoto = (e: React.MouseEvent, listingId: string) => {
@@ -169,67 +219,94 @@ export default function ReventaListings() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
       ) : filteredListings.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-          {filteredListings.map(listing => {
-            const photos = getCardPhotos(listing);
-            const photoIdx = cardPhotoIndices[listing.id] || 0;
-            const hasMultiplePhotos = photos.length > 1;
-            return (
-            <div key={listing.id} onClick={() => handleCardClick(listing)} className="bg-card rounded-2xl border border-border overflow-hidden hover:shadow-md transition-shadow group cursor-pointer">
-              <div className="aspect-3/4 overflow-hidden relative">
-                <img
-                  src={photos[photoIdx]}
-                  alt={listing.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+            {filteredListings.map(listing => {
+              const photos = getCardPhotos(listing);
+              const photoIdx = cardPhotoIndices[listing.id] || 0;
+              const hasMultiplePhotos = photos.length > 1;
+              return (
+                <div key={listing.id} onClick={() => handleCardClick(listing)} className="bg-card rounded-2xl border border-border overflow-hidden hover:shadow-md transition-shadow group cursor-pointer">
+                  <div className="aspect-3/4 overflow-hidden relative bg-bg">
+                    <img
+                      src={getThumbnailUrl(photos[photoIdx])}
+                      alt={listing.title}
+                      loading="lazy"
+                      decoding="async"
+                      width="400"
+                      height="533"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {/* Preload next carousel image for instant switching */}
+                    {hasMultiplePhotos && (
+                      <link
+                        rel="preload"
+                        as="image"
+                        href={getThumbnailUrl(photos[(photoIdx + 1) % photos.length])}
+                        className="hidden"
+                      />
+                    )}
 
-                {/* Navigation arrows */}
-                {hasMultiplePhotos && (
-                  <>
-                    <button
-                      onClick={(e) => prevCardPhoto(e, listing.id)}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity backdrop-blur-sm"
-                    >
-                      <span className="material-icons text-sm">chevron_left</span>
-                    </button>
-                    <button
-                      onClick={(e) => nextCardPhoto(e, listing.id)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity backdrop-blur-sm"
-                    >
-                      <span className="material-icons text-sm">chevron_right</span>
-                    </button>
-                    {/* Photo counter */}
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">
-                      {photoIdx + 1}/{photos.length}
+                    {/* Navigation arrows */}
+                    {hasMultiplePhotos && (
+                      <>
+                        <button
+                          onClick={(e) => prevCardPhoto(e, listing.id)}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity backdrop-blur-sm"
+                        >
+                          <span className="material-icons text-sm">chevron_left</span>
+                        </button>
+                        <button
+                          onClick={(e) => nextCardPhoto(e, listing.id)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity backdrop-blur-sm"
+                        >
+                          <span className="material-icons text-sm">chevron_right</span>
+                        </button>
+                        {/* Photo counter */}
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">
+                          {photoIdx + 1}/{photos.length}
+                        </div>
+                      </>
+                    )}
+
+                    <div className="absolute top-2 right-2">
+                      <button
+                        onClick={(e) => handleToggleFavorite(e, listing.id)}
+                        className="bg-white/80 backdrop-blur w-10 h-10 flex items-center justify-center rounded-full text-primary hover:bg-white transition-colors shadow-sm"
+                      >
+                        <span className="material-icons text-sm">{favoriteIds.has(listing.id) ? 'favorite' : 'favorite_border'}</span>
+                      </button>
                     </div>
-                  </>
-                )}
-
-                <div className="absolute top-2 right-2">
-                  <button
-                    onClick={(e) => handleToggleFavorite(e, listing.id)}
-                    className="bg-white/80 backdrop-blur w-10 h-10 flex items-center justify-center rounded-full text-primary hover:bg-white transition-colors shadow-sm"
-                  >
-                    <span className="material-icons text-sm">{favoriteIds.has(listing.id) ? 'favorite' : 'favorite_border'}</span>
-                  </button>
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-bold text-text truncate">{listing.title}</h3>
+                    <p className="text-sm text-muted mb-1 truncate">{listing.author}</p>
+                    <p className="text-xs text-muted/70 truncate mb-2">{listing.profiles?.full_name || 'Vendedor'}</p>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-primary font-bold">
+                        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(listing.price)}
+                      </span>
+                      <span className="text-[10px] bg-bg px-2 py-0.5 rounded-full text-muted uppercase tracking-wider font-semibold">
+                        {listing.condition || 'Usado'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="p-4">
-                <h3 className="font-bold text-text truncate">{listing.title}</h3>
-                <p className="text-sm text-muted mb-1 truncate">{listing.author}</p>
-                <p className="text-xs text-muted/70 truncate mb-2">{listing.profiles?.full_name || 'Vendedor'}</p>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-primary font-bold">
-                    {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(listing.price)}
-                  </span>
-                  <span className="text-[10px] bg-bg px-2 py-0.5 rounded-full text-muted uppercase tracking-wider font-semibold">
-                    {listing.condition || 'Usado'}
-                  </span>
-                </div>
-              </div>
+              );
+            })}
+          </div>
+          {hasMoreListings && (
+            <div className="flex justify-center py-8">
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="text-sm text-muted hover:text-primary font-medium px-6 py-2.5 rounded-full bg-bg border border-border hover:border-primary transition-colors disabled:opacity-50"
+              >
+                {loadingMore ? 'Cargando...' : 'Cargar más'}
+              </button>
             </div>
-          )})}
-        </div>
+          )}
+        </>
       ) : (
         <div className="text-center py-20">
           <span className="material-icons text-6xl text-muted/30 mb-4">search_off</span>
