@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { notifyAdminOfNewUser } from '../lib/notifications';
 
 export default function AuthForm() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -71,6 +72,15 @@ export default function AuthForm() {
             birth_date: userType === 'persona' ? birthDate : null,
             status: 'pending',
           });
+
+          // Notificar al admin por push notification
+          if (profileError === null) {
+            try {
+              await notifyAdminOfNewUser(name || email.split('@')[0]);
+            } catch (notifyError) {
+              console.error('Error notifying admin:', notifyError);
+            }
+          }
         }
 
         setMessage({ type: 'success', text: 'Registro exitoso. Revisa tu correo electrónico.' });

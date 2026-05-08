@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { sanitizeText, sanitizePrice, sanitizeInput } from '../lib/validation';
 
 const CATEGORIES = ['Matemáticas', 'Física', 'Química', 'Clásicos', 'Fantasía', 'Ciencia Ficción', 'Misterio', 'Thriller', 'Romance', 'Poesía', 'Cuento', 'Ensayo', 'Novela', 'Biografía', 'Historia', 'Filosofía', 'Psicología', 'Autoayuda', 'Economía', 'Negocios', 'Finanzas', 'Derecho', 'Salud', 'Arte', 'Diseño', 'Arquitectura', 'Música', 'Cocina', 'Viajes', 'Deportes', 'Infantil', 'Juvenil', 'Cómic', 'Manga', 'Tecnología', 'Programación', 'Idiomas', 'Académico', 'Otros'];
 const CONDITIONS = ['Nuevo', 'Como nuevo', 'Buen estado', 'Aceptable'];
@@ -92,11 +93,26 @@ export default function PublishListing() {
 
       const coverUrl = photos.length > 0 ? photos[coverIndex] : null;
 
-      const { error } = await supabase.from('listings').insert({
-        ...form,
-        price: parseInt(form.price),
+      const sanitizedForm = {
+        title: sanitizeText(form.title, 200),
+        author: sanitizeText(form.author, 100),
+        editorial: sanitizeText(form.editorial, 100),
+        description: sanitizeText(form.description, 2000),
+        price: sanitizePrice(form.price),
+        category: sanitizeInput(form.category),
+        condition: sanitizeInput(form.condition),
+        location: sanitizeInput(form.location, 100),
+        shipping_option: sanitizeInput(form.shippingOption),
         isbn: form.isbn.trim() || null,
-        shipping_option: form.shippingOption || null,
+      };
+
+      if (!sanitizedForm.title || !sanitizedForm.author || !sanitizedForm.price) {
+        alert('Por favor, completa los campos requeridos.');
+        return;
+      }
+
+      const { error } = await supabase.from('listings').insert({
+        ...sanitizedForm,
         seller_id: user.id,
         photo_url: coverUrl,
         photos: photos.length > 0 ? photos : null,

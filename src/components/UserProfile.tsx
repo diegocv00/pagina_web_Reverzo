@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { validateAndSanitizeId } from '../lib/validation';
 
 export default function UserProfile() {
   const [profile, setProfile] = useState<any>(null);
@@ -23,7 +24,8 @@ export default function UserProfile() {
       
       // Check if viewing another user's profile via URL parameter
       const urlParams = new URLSearchParams(window.location.search);
-      const targetUserId = urlParams.get('userId');
+      const rawTargetUserId = urlParams.get('userId');
+      const targetUserId = validateAndSanitizeId(rawTargetUserId);
       const profileId = targetUserId || user?.id;
       const isOwn = !targetUserId || targetUserId === user?.id;
       setIsOwnProfile(isOwn);
@@ -78,6 +80,11 @@ export default function UserProfile() {
         }
       } else if (!targetUserId) {
         window.location.href = '/auth';
+      }
+
+      // Redirect if userId is invalid
+      if (rawTargetUserId && !targetUserId) {
+        window.location.href = '/';
       }
       setLoading(false);
     }

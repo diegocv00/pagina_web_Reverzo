@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { sendReportEmail } from '../lib/email';
+import { validateAndSanitizeId, sanitizeText, sanitizePrice } from '../lib/validation';
 
 const CATEGORIES = ['Matemáticas', 'Física', 'Química', 'Clásicos', 'Fantasía', 'Ciencia Ficción', 'Misterio', 'Thriller', 'Romance', 'Poesía', 'Cuento', 'Ensayo', 'Novela', 'Biografía', 'Historia', 'Filosofía', 'Psicología', 'Autoayuda', 'Economía', 'Negocios', 'Finanzas', 'Derecho', 'Salud', 'Arte', 'Diseño', 'Arquitectura', 'Música', 'Cocina', 'Viajes', 'Deportes', 'Infantil', 'Juvenil', 'Cómic', 'Manga', 'Tecnología', 'Programación', 'Idiomas', 'Académico', 'Otros'];
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=800&auto=format&fit=crop';
@@ -27,11 +28,17 @@ export default function ListingDetail() {
   const [errorImages, setErrorImages] = useState<Record<number, boolean>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const id = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
+  const rawId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
+  const id = validateAndSanitizeId(rawId);
 
   useEffect(() => {
     async function fetchListing() {
       if (!id) {
+        // If rawId was provided but invalid, redirect
+        if (rawId) {
+          window.location.href = '/reventa';
+          return;
+        }
         setError(true);
         setLoading(false);
         return;

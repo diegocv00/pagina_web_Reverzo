@@ -2,6 +2,19 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchFavoriteIds, toggleFavorite } from '../lib/favorites';
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=400&auto=format&fit=crop';
 
 const CATEGORIES = ['Matemáticas', 'Física', 'Química', 'Clásicos', 'Fantasía', 'Ciencia Ficción', 'Misterio', 'Thriller', 'Romance', 'Poesía', 'Cuento', 'Ensayo', 'Novela', 'Biografía', 'Historia', 'Filosofía', 'Psicología', 'Autoayuda', 'Economía', 'Negocios', 'Finanzas', 'Derecho', 'Salud', 'Arte', 'Diseño', 'Arquitectura', 'Música', 'Cocina', 'Viajes', 'Deportes', 'Infantil', 'Juvenil', 'Cómic', 'Manga', 'Tecnología', 'Programación', 'Idiomas', 'Académico', 'Otros'];
@@ -16,6 +29,8 @@ export default function ReventaListings() {
   const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
   const [errorImages, setErrorImages] = useState<Record<string, boolean>>({});
   const [sort, setSort] = useState('newest');
+
+  const debouncedSearchText = useDebounce(searchText, 300);
 
   const [listingsOffset, setListingsOffset] = useState(0);
   const [hasMoreListings, setHasMoreListings] = useState(true);
@@ -90,9 +105,9 @@ export default function ReventaListings() {
 
   const filteredListings = useMemo(() => {
     let result = listings.filter(item => {
-      const matchesSearch = !searchText ||
-        item.title?.toLowerCase().includes(searchText.toLowerCase()) ||
-        item.author?.toLowerCase().includes(searchText.toLowerCase());
+      const matchesSearch = !debouncedSearchText ||
+        item.title?.toLowerCase().includes(debouncedSearchText.toLowerCase()) ||
+        item.author?.toLowerCase().includes(debouncedSearchText.toLowerCase());
       const matchesCategory = !selectedCategory || item.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });

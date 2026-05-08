@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchMessages, sendMessage, markAsRead } from '../lib/chat';
 import { sendReportEmail } from '../lib/email';
+import { validateAndSanitizeId } from '../lib/validation';
 
 export default function ChatWindow() {
   const [messages, setMessages] = useState<any[]>([]);
@@ -30,7 +31,8 @@ export default function ChatWindow() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const conversationId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
+  const rawConversationId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
+  const conversationId = validateAndSanitizeId(rawConversationId);
 
   useEffect(() => {
     async function setupChat() {
