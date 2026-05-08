@@ -6,6 +6,15 @@ import { validateAndSanitizeId, sanitizeText, sanitizePrice } from '../lib/valid
 const CATEGORIES = ['Matemáticas', 'Física', 'Química', 'Clásicos', 'Fantasía', 'Ciencia Ficción', 'Misterio', 'Thriller', 'Romance', 'Poesía', 'Cuento', 'Ensayo', 'Novela', 'Biografía', 'Historia', 'Filosofía', 'Psicología', 'Autoayuda', 'Economía', 'Negocios', 'Finanzas', 'Derecho', 'Salud', 'Arte', 'Diseño', 'Arquitectura', 'Música', 'Cocina', 'Viajes', 'Deportes', 'Infantil', 'Juvenil', 'Cómic', 'Manga', 'Tecnología', 'Programación', 'Idiomas', 'Académico', 'Otros'];
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1512820790803-83ca734da794?q=80&w=800&auto=format&fit=crop';
 
+function getOptimizedImageUrl(url: string): string {
+  if (!url) return FALLBACK_IMAGE;
+  if (url.includes('.supabase.co/storage/v1/object/public/')) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}width=1200&resize=contain`;
+  }
+  return url;
+}
+
 export default function ListingDetail() {
   const [listing, setListing] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -28,24 +37,41 @@ export default function ListingDetail() {
   const [errorImages, setErrorImages] = useState<Record<number, boolean>>({});
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const rawId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : null;
-  const id = validateAndSanitizeId(rawId);
+  const [id, setId] = useState<string | null>(null);
+  const [idLoaded, setIdLoaded] = useState(false);
+
+  const preloadAdjacentImages = useCallback((currentIdx: number, photos: string[]) => {
+    if (photos.length <= 1) return;
+    const preloadIndices = [];
+    for (let i = 1; i <= 2; i++) {
+      preloadIndices.push((currentIdx + i) % photos.length);
+      preloadIndices.push((currentIdx - i + photos.length) % photos.length);
+    }
+    preloadIndices.forEach(idx => {
+      const img = new Image();
+      img.src = getOptimizedImageUrl(photos[idx]);
+    });
+  }, []);
+
+  useEffect(() => {
+    const rawId = new URLSearchParams(window.location.search).get('id');
+    const validatedId = validateAndSanitizeId(rawId);
+    setId(validatedId);
+    setIdLoaded(true);
+  }, []);
 
   useEffect(() => {
     async function fetchListing() {
+      if (!idLoaded) return;
       if (!id) {
-        // If rawId was provided but invalid, redirect
-        if (rawId) {
+        if (window.location.search.includes('id=')) {
           window.location.href = '/reventa';
-          return;
         }
-        setError(true);
-        setLoading(false);
         return;
       }
 
+      setLoading(true);
       try {
-        // Fetch user and listing in parallel
         const [userResult, listingResult] = await Promise.all([
           supabase.auth.getUser(),
           supabase
@@ -63,12 +89,7 @@ export default function ListingDetail() {
 
         setCurrentUser(user);
 
-        if (fetchError) {
-          setError(true);
-          return;
-        }
-
-        if (!data) {
+        if (fetchError || !data) {
           setError(true);
           return;
         }
@@ -101,7 +122,7 @@ export default function ListingDetail() {
       }
     }
     fetchListing();
-  }, [id]);
+  }, [id, idLoaded]);
 
   const handleContact = async () => {
       if (!currentUser) {
@@ -160,15 +181,6 @@ export default function ListingDetail() {
 
   const isMine = currentUser?.id === listing.seller_id;
 
-  const getOptimizedImageUrl = (url: string): string => {
-    if (!url) return FALLBACK_IMAGE;
-    if (url.includes('.supabase.co/storage/v1/object/public/')) {
-      const separator = url.includes('?') ? '&' : '?';
-      return `${url}${separator}width=1200&resize=contain`;
-    }
-    return url;
-  };
-
   const handleImageLoad = (idx: number) => {
     setLoadedImages(prev => ({ ...prev, [idx]: true }));
   };
@@ -176,19 +188,6 @@ export default function ListingDetail() {
   const handleImageError = (idx: number) => {
     setErrorImages(prev => ({ ...prev, [idx]: true }));
   };
-
-  const preloadAdjacentImages = useCallback((currentIdx: number, photos: string[]) => {
-    if (photos.length <= 1) return;
-    const preloadIndices = [];
-    for (let i = 1; i <= 2; i++) {
-      preloadIndices.push((currentIdx + i) % photos.length);
-      preloadIndices.push((currentIdx - i + photos.length) % photos.length);
-    }
-    preloadIndices.forEach(idx => {
-      const img = new Image();
-      img.src = getOptimizedImageUrl(photos[idx]);
-    });
-  }, []);
 
   return (
     <div className="max-w-5xl mx-auto py-8">
@@ -233,7 +232,7 @@ export default function ListingDetail() {
                                             alt={`${listing.title} ${idx + 1}`}
                                             loading={idx === 0 ? 'eager' : 'lazy'}
                                             decoding="async"
-                                            fetchpriority={idx === 0 ? 'high' : 'auto'}
+                                            fetchPriority={idx === 0 ? 'high' : 'auto'}
                                             width="1200"
                                             height="1600"
                                             onLoad={() => handleImageLoad(idx)}
